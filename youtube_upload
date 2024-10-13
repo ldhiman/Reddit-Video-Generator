@@ -1,0 +1,58 @@
+# youtube_uploader.py
+
+import os
+import google_auth_oauthlib.flow
+import googleapiclient.discovery
+import googleapiclient.errors
+from googleapiclient.http import MediaFileUpload
+
+scopes = ["https://www.googleapis.com/auth/youtube.upload"]
+
+def authenticate():
+    # Disable OAuthlib's HTTPS verification when running locally.
+    # *DO NOT* leave this option enabled in production.
+    os.environ["OAUTHLIB_INSECURE_TRANSPORT"] = "1"
+
+    client_secrets_file = "client_secret.json"  # You need to obtain this file from Google Cloud Console
+
+    flow = google_auth_oauthlib.flow.Flow.from_client_secrets_file(
+        client_secrets_file, scopes)
+    flow.run_local_server(port=8080, prompt="consent")
+    credentials = flow.credentials
+
+    return googleapiclient.discovery.build("youtube", "v3", credentials=credentials)
+
+def upload_video(title, description, file_path, category="22", privacy_status="unlisted"):
+    youtube = authenticate()
+
+    request = youtube.videos().insert(
+        part="snippet,status",
+        body={
+            "snippet": {
+                "title": title,
+                "description": description,
+                "categoryId": category
+            },
+            "status": {
+                "privacyStatus": privacy_status
+            }
+        },
+        media_body=MediaFileUpload(file_path)
+    )
+
+    try:
+        response = request.execute()
+        print(f"Upload successful! Video ID: {response['id']}")
+        return response['id']
+    except googleapiclient.errors.HttpError as e:
+        print(f"An HTTP error {e.resp.status} occurred:\n{e.content}")
+        return None
+
+if __name__ == "__main__":
+    title = "Test Video Upload"
+    description = "This is a test video uploaded via the YouTube Data API"
+    file_path = "path/to/your/video.mp4"
+    
+    video_id = upload_video(title, description, file_path)
+    if video_id:
+        print(f"Video uploaded successfully. YouTube URL: https://www.youtube.com/watch?v={video_id}")
